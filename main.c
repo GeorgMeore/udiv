@@ -11,13 +11,19 @@ typedef unsigned long u64;
 u8 nlz(u64 x)
 {
 	u8 n = 64;
-	u8 c; /* binary search condition */
-	c = !!(x >> 32), x >>= c << 5, n -= c << 5;
-	c = !!(x >> 16), x >>= c << 4, n -= c << 4;
-	c = !!(x >> 8),  x >>= c << 3, n -= c << 3;
-	c = !!(x >> 4),  x >>= c << 2, n -= c << 2;
-	c = !!(x >> 2),  x >>= c << 1, n -= c << 1;
-	c = !!(x >> 1),  x >>= c, n -= !!c;
+	u8 c;
+	c = !!(x >> 32) << 5;
+	x >>= c, n -= c;
+	c = !!(x >> 16) << 4;
+	x >>= c, n -= c;
+	c = !!(x >> 8) << 3;
+	x >>= c, n -= c;
+	c = !!(x >> 4) << 2;
+	x >>= c, n -= c;
+	c = !!(x >> 2) << 1;
+	x >>= c, n -= c;
+	c = x >> 1;
+	x >>= c, n -= c;
 	return (n - x);
 }
 
@@ -31,9 +37,9 @@ u64 inverse(u32 v)
 	return q + (r / v) + !!(r % v);
 }
 
+/* NOTE: compute floor(x * inv / 2^64) */
 u32 div(u32 x, u64 inv)
 {
-	/* compute floor(x * inv / 2^64) */
 	u64 lo = inv & 0xFFFFFFFF, hi = inv >> 32;
 	return (hi*x + (lo * x >> 32)) >> 32;
 }
