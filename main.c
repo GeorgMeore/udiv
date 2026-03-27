@@ -102,6 +102,9 @@ void divu128u64(u128 x, u64 y, u128 *q, u64 *r)
 	q->hi = q0;
 }
 
+/* TODO: u128 inv64(u64 x) */
+/* TODO: u64 div64inv(u64 x, u128 inv) */
+
 void testdivu128u64(void)
 {
 	u128 x = {0x706cec5e0be2831a, 0x9485acc9b0c7b807}; /* 197419823412375981738123985713249813274 */
