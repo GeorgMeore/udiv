@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <assert.h>
 
+/*
+ * This code is based on the wonderful series of articles on the topic
+ * made by the author of libdivide, if you are interested you should check it out
+ *
+ * https://ridiculousfish.com/blog/posts/labor-of-division-episode-i.html
+ */
+
 typedef signed char   i8;
 typedef unsigned char u8;
 typedef signed int    i32;
