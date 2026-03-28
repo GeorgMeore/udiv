@@ -27,17 +27,50 @@ u8 nlz(u64 x)
 	return (n - x);
 }
 
-/* NOTE: computes ceil(2^64 / v) via one step of long division
- * plus hardware divide, v must not be a power of 2 */
-u64 inv32(u32 v)
+/* NOTE: we need this because compiler vendors are fucking morons
+ * and use UB as an excuse for breaking your code */
+static u64 rsh(u64 x, u8 n)
 {
-	u8 n = nlz(v);          /* smallest n such that v*2^n < 2^64 */
-	u64 r = -((u64)v << n); /* 2^64 - v*2^n */
-	u64 q = (u64)1 << n;    /* 2^n goes into the quotient */
-	return q + (r / v) + !!(r % v);
+	u8 q = n / 64, r = n % 64;
+	return !q * (x >> r);
 }
 
-/* NOTE: compute floor(x * inv / 2^64) */
+/*
+ * If we want to compute (2^p / x), where (x < 2^p) and x is not a power of 2,
+ * we can do that using just p-bit unsigned subtract and divide.
+ *
+ * Let's start with long (shift-subtract) division:
+ *
+ *   1000..0000 <- 2^p (p + 1 bits)
+ *   ----------
+ *       1..1.. <- x (n bits)
+ *   1..1..0000 <- x * 2^(p + 1 - n)
+ *    1..1..000 <- x * 2^(p - n)
+ *
+ * It's obvious that (x * 2^(p + 1 - n) > 2^p) and (x * 2^(p - n) < 2^p), so
+ * the first subtract must happen with the latter value.
+ * Doing the subtract is trivial since (2^p - v) mod 2^p = (0 - v) mod 2^p,
+ * or just (-v mod 2^p). After that we're left with the task of dividing
+ * a p-bit remainder by an n-bit value.
+ *
+ * So the following algorithm will compute the correct quotient
+ * and remainder in q and r respectively:
+ *
+ *   q' = 2^(p - n)
+ *   r' = -(x * q') mod 2^p
+ *   q  = r' / x + q'
+ *   r  = r' % x
+ */
+
+/* ceil(2^64 / v) */
+u64 inv32(u32 v)
+{
+	u8 n = nlz(v);
+	u64 r = -((u64)v << n);
+	return ((u64)1 << n) + (r / v) + !!(r % v);
+}
+
+/* floor(x * inv / 2^64) */
 u32 div32inv(u32 x, u64 inv)
 {
 	u64 lo = inv & 0xFFFFFFFF, hi = inv >> 32;
@@ -92,7 +125,7 @@ void divu128u64(u128 x, u64 y, u128 *q, u64 *r)
 	x.hi = x.hi % y; /* now shifting x by nlz(y) is safe */
 	u8 n = nlz(y);
 	u64 yn = y << n;
-	u128 xn = {x.lo << n, (x.hi << n) | (x.lo >> (64 -n))};
+	u128 xn = {x.lo << n, (x.hi << n) | rsh(x.lo, 64 - n)};
 	u64 q1, r1;
 	D(xn.hi, xn.lo >> 32, yn, &q1, &r1);
 	u64 q2, r2;
@@ -102,8 +135,39 @@ void divu128u64(u128 x, u64 y, u128 *q, u64 *r)
 	q->hi = q0;
 }
 
-/* TODO: u128 inv64(u64 x) */
-/* TODO: u64 div64inv(u64 x, u128 inv) */
+/* ceil(2^128 / x) */
+u128 inv64(u64 x)
+{
+	u8 n = nlz(x);
+	u128 t = {-(x << n) , ~(u64)0};
+	u128 q;
+	u64 r;
+	divu128u64(t, x, &q, &r);
+	u64 d = ((u64)1 << n) + !!r;
+	q.lo += d;
+	q.hi += (q.lo < d);
+	return q;
+}
+
+static u128 mulu64(u64 x, u64 y)
+{
+	u64 x0 = x & 0xFFFFFFFF, x1 = x >> 32;
+	u64 y0 = y & 0xFFFFFFFF, y1 = y >> 32;
+	u64 t = x0*y1 + y0*x1;
+	u64 of1 = t < x0*y1;
+	u64 lo = x0*y0 + (t << 32);
+	u64 of2 = lo < x0*y0;
+	u64 hi = x1*y1 + (t >> 32) + of2 + (of1 << 32);
+	return (u128){lo, hi};
+}
+
+/* floor(x * inv / 2^128) */
+u64 div64inv(u64 x, u128 inv)
+{
+	u128 lo = mulu64(x, inv.lo);
+	u128 hi = mulu64(x, inv.hi);
+	return hi.hi + (lo.hi + hi.lo < lo.hi);
+}
 
 void testdivu128u64(void)
 {
@@ -127,10 +191,20 @@ void testinv32(void)
 	assert(c == 2223);
 }
 
-/* TODO: randomized testers */
+void testinv64(void)
+{
+	u64 c1 = div64inv(15974531580214495800UL, inv64(2817953302490816533UL));
+	assert(c1 == 5);
+	u64 c2 = div64inv(3086287087048080399UL, inv64(28175330249086533UL));
+	assert(c2 == 109);
+}
+
+/* TODO: handle powers of two in inv32 and inv64 */
+/* TODO: randomized tests */
 int main(void)
 {
 	testinv32();
+	testinv64();
 	testdivu128u64();
 	return 0;
 }
