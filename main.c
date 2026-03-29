@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <time.h>
 
 /*
  * This code is based on the wonderful series of articles on the topic
@@ -193,9 +195,18 @@ void testinv32(void)
 	u32 a = 8638219;
 	u32 b = 3885;
 	u64 i = inv32(b);
-	printf("%lu(%lx)\n", i, i);
 	u64 c = div32inv(a, i);
 	assert(c == 2223);
+	for (u32 r = 0; r < 10000; r++) {
+		u32 a = rand();
+		if (a & (a - 1)) {
+			u64 i = inv32(a);
+			for (u32 j = 0; j < 1000; j++) {
+				u32 b = rand();
+				assert(b / a == div32inv(b, i));
+			}
+		}
+	}
 }
 
 void testinv64(void)
@@ -204,12 +215,22 @@ void testinv64(void)
 	assert(c1 == 5);
 	u64 c2 = div64inv(3086287087048080399UL, inv64(28175330249086533UL));
 	assert(c2 == 109);
+	for (u32 r = 0; r < 10000; r++) {
+		u64 a = (u64)rand() * (u64)rand();
+		if (a & (a - 1)) {
+			u128 i = inv64(a);
+			for (u32 j = 0; j < 1000; j++) {
+				u64 b = (u64)rand() * (u64)rand();
+				assert(b / a == div64inv(b, i));
+			}
+		}
+	}
 }
 
 /* TODO: handle powers of two in inv32 and inv64 */
-/* TODO: randomized tests */
 int main(void)
 {
+	srand(time(0));
 	testinv32();
 	testinv64();
 	testdivu128u64();
